@@ -1,4 +1,4 @@
-# @npflared/api
+# @firestash/api
 
 ## 0.2.0
 
