@@ -57,7 +57,8 @@ const applyDeploymentConfig = (config: WorkerConfig, env: Record<string, string>
 		"ADMIN_AUTH_PROVIDER",
 		"CF_ACCESS_TEAM_DOMAIN",
 		"CF_ACCESS_AUD",
-		"FALLBACK_REGISTRY_ENDPOINT"
+		"FALLBACK_REGISTRY_ENDPOINT",
+		"DOCS_URL"
 	]) {
 		use(variable, (value) => {
 			config.vars = { ...config.vars, [variable]: value };
