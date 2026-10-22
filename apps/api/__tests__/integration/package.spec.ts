@@ -1,7 +1,7 @@
 import { env, fetchMock } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import packagePublishPayload from "../mocks/package-publish-payload.json";
-import { createToken, httpTestClient, publishMockPackage } from "../utils";
+import { createToken, httpTestClient, publishMockPackage, servedManifestOf } from "../utils";
 
 describe("package routes", () => {
 	beforeAll(() => {
@@ -464,7 +464,9 @@ describe("package routes", () => {
 			expect(responseBody).to.have.property("name").to.be.a("string").to.equal(packagePublishPayload.name);
 			expect(responseBody).to.have.property("_id").to.be.a("string").to.equal(packagePublishPayload._id);
 			expect(responseBody).to.have.property("dist-tags").to.be.deep.equal(packagePublishPayload["dist-tags"]);
-			expect(responseBody).to.have.property("versions").to.be.deep.equal(packagePublishPayload.versions);
+			expect(responseBody)
+				.to.have.property("versions")
+				.to.be.deep.equal({ "1.0.0": servedManifestOf(packagePublishPayload.versions["1.0.0"]) });
 		});
 
 		it("should get a package that does not belong to the local registry and fallback to the fallback registry", async () => {

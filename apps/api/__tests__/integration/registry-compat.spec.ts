@@ -8,7 +8,9 @@ import {
 	httpTestClient,
 	publishMockPackage,
 	publishPackage,
-	tarballUrlOf
+	servedManifestOf,
+	tarballUrlOf,
+	testClientOrigin
 } from "../utils";
 
 /**
@@ -21,7 +23,7 @@ const scopedPackageName = "@mock/scoped";
 const npmEncodedScopedPackageName = "@mock%2fscoped";
 const pnpmEncodedScopedPackageName = "@mock%2Fscoped";
 
-/** The metadata document npm clients read: the manifests are passed through as published. */
+/** The metadata document npm clients read: the manifests are passed through as published, except for the tarball URL. */
 type PackageMetadata = {
 	_id: string;
 	name: string;
@@ -71,11 +73,46 @@ describe("registry compatibility", () => {
 			const metadata = await getPackageMetadata("mock", token);
 			const latest = metadata["dist-tags"].latest ?? "";
 			const tarballUrl = metadata.versions[latest]?.dist.tarball ?? "";
-			expect(tarballUrl).toBe(packagePublishPayload.versions["1.0.0"].dist.tarball);
+			expect(tarballUrl).toBe(`${testClientOrigin}/mock/-/mock-1.0.0.tgz`);
 
 			const tarballResponse = await fetchTarball(tarballUrl, token);
 			expect(tarballResponse.status).toBe(200);
 			expect((await tarballResponse.arrayBuffer()).byteLength).toBe(expectedTarballLength);
+		});
+
+		it("should advertise tarballs on the origin the metadata is requested from", async () => {
+			// npm publishes `dist.tarball` with an `http://` scheme and the host the publisher had configured
+			// (see libnpmpublish), so the stored URL must not leak into what installers are told to fetch.
+			const { token } = await createToken({
+				name: "publisher",
+				scopes: [{ type: "package:read+write", values: ["mock"] }]
+			});
+			const publishedVersion = packagePublishPayload.versions["1.0.0"];
+			const publishResponse = await publishPackage(
+				"mock",
+				{
+					...packagePublishPayload,
+					versions: {
+						"1.0.0": {
+							...publishedVersion,
+							dist: { ...publishedVersion.dist, tarball: "http://old-registry.example/mock/-/mock-1.0.0.tgz" }
+						}
+					}
+				},
+				token
+			);
+			expect(publishResponse.status).toBe(200);
+
+			const response = await app.request(
+				"https://registry.example.com/mock",
+				{ headers: { Authorization: `Bearer ${token}` } },
+				env,
+				createExecutionContext()
+			);
+			expect(response.status).toBe(200);
+
+			const metadata = (await response.json()) as PackageMetadata;
+			expect(metadata.versions["1.0.0"]?.dist.tarball).toBe("https://registry.example.com/mock/-/mock-1.0.0.tgz");
 		});
 
 		it("should resolve packages that are not in the registry from the fallback registry", async () => {
@@ -108,7 +145,7 @@ describe("registry compatibility", () => {
 			expect(metadata).to.have.property("name", "mock");
 			expect(metadata["dist-tags"]).to.deep.equal({ latest: "1.0.0", next: "2.0.0" });
 			expect(Object.keys(metadata.versions)).to.deep.equal(["1.0.0", "2.0.0"]);
-			expect(metadata.versions["1.0.0"]).to.deep.equal(packagePublishPayload.versions["1.0.0"]);
+			expect(metadata.versions["1.0.0"]).to.deep.equal(servedManifestOf(packagePublishPayload.versions["1.0.0"]));
 			expect(metadata.versions["2.0.0"]).to.have.property("version", "2.0.0");
 
 			const time = metadata.time;
@@ -159,7 +196,7 @@ describe("registry compatibility", () => {
 			expect(metadata["dist-tags"]).to.deep.equal({ latest: "1.0.0" });
 
 			const tarballUrl = metadata.versions["1.0.0"]?.dist.tarball ?? "";
-			expect(tarballUrl).toBe(`http://localhost:8787/${scopedPackageName}/-/${scopedPackageName}-1.0.0.tgz`);
+			expect(tarballUrl).toBe(`${testClientOrigin}/${scopedPackageName}/-/${scopedPackageName}-1.0.0.tgz`);
 
 			const tarballResponse = await fetchTarball(tarballUrl, token);
 			expect(tarballResponse.status).toBe(200);

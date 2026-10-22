@@ -64,6 +64,15 @@ type PublishPayload = InferRequestType<(typeof httpTestClient)[":packageName"]["
 
 export const tarballUrlOf = (name: string, version: string) => `http://localhost:8787/${name}/-/${name}-${version}.tgz`;
 
+/** The origin `httpTestClient` sends its requests from, hence the one served tarball URLs must use. */
+export const testClientOrigin = "http://localhost";
+
+/** A published manifest as the registry serves it: the tarball URL is rewritten to the requested origin. */
+export const servedManifestOf = <T extends { dist: { tarball: string } }>(manifest: T): T => ({
+	...manifest,
+	dist: { ...manifest.dist, tarball: new URL(new URL(manifest.dist.tarball).pathname, testClientOrigin).href }
+});
+
 /** Builds the payload `npm publish` sends for a package, reusing the mock tarball. */
 export const createPublishPayload = (
 	name: string,
