@@ -14,7 +14,26 @@ type Manifest = {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	peerDependencies?: Record<string, string>;
+	dist?: { tarball?: unknown; [key: string]: unknown };
 	[key: string]: unknown;
+};
+
+/**
+ * Points a manifest's `dist.tarball` at `registryOrigin`, keeping the path it was published with.
+ * A manifest without a parseable tarball URL is returned untouched.
+ */
+const withTarballOrigin = (manifest: Manifest, registryOrigin: string): Manifest => {
+	const dist = manifest.dist;
+	if (typeof dist?.tarball !== "string") {
+		return manifest;
+	}
+
+	try {
+		const { pathname } = new URL(dist.tarball);
+		return { ...manifest, dist: { ...dist, tarball: new URL(pathname, registryOrigin).href } };
+	} catch {
+		return manifest;
+	}
 };
 
 /** Escapes `%`, `_` and `\` so a search term is matched literally by `LIKE`. */
@@ -108,7 +127,13 @@ export const packageService = {
 		};
 	},
 
-	async getPackage(packageName: string) {
+	/**
+	 * Returns the package document npm clients read. Tarball URLs are rewritten to `registryOrigin`
+	 * (the origin the metadata is requested from), as public registries do: npm publishes them with
+	 * an `http://` scheme and whatever host the publisher had configured, so the stored value cannot
+	 * be trusted to point at this registry over HTTPS.
+	 */
+	async getPackage(packageName: string, registryOrigin: string) {
 		const publishedPackage = await db.query.packageTable.findFirst({
 			with: { packageReleases: true },
 			where: (table, { eq }) => eq(table.name, packageName)
@@ -120,7 +145,7 @@ export const packageService = {
 
 		const versions = publishedPackage.packageReleases.reduce(
 			(versions, { version, manifest }) => {
-				versions[version] = manifest;
+				versions[version] = withTarballOrigin(manifest as Manifest, registryOrigin);
 				return versions;
 			},
 			{} as Record<string, unknown>
