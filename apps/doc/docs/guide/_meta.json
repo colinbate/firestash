@@ -12,7 +12,7 @@
 	},
 	{
 		"type": "dir",
-		"name": "cookbook",
-		"label": "Cookbook"
+		"name": "admin",
+		"label": "Admin"
 	}
 ]

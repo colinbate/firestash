@@ -1,11 +1,19 @@
-name = "npflared"
+name = "firestash"
 main = "src/index.ts"
 compatibility_date = "2026-01-07"
 
 compatibility_flags = [ "nodejs_compat" ]
 
+# Values that differ between deployments (resources, domain, Access application) are applied at build time
+# from the environment, see .env.example. The placeholders below are what a plain `wrangler` command sees.
 [vars]
 FALLBACK_REGISTRY_ENDPOINT = "https://registry.npmjs.org"
+# Admin authentication: "cloudflare-access" needs CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD, provided as build
+# variables or as worker secrets; until then the admin area (/_/admin and everything below it) stays closed.
+# For local development, put ADMIN_AUTH_PROVIDER = "local" in a .dev.vars file (see .dev.vars.example).
+ADMIN_AUTH_PROVIDER = "cloudflare-access"
+# Address of the product documentation, linked from the usage page at the root of the registry. Optional.
+DOCS_URL = ""
 
 [[r2_buckets]]
 binding = "BUCKET"
@@ -15,3 +23,11 @@ bucket_name = "bucket-name"
 binding = "DB"
 database_name = "D1_DATABASE_NAME"
 database_id = "D1_DATABASE_ID"
+
+# The admin UI (./admin) is built by the Cloudflare Vite plugin into the worker's static assets.
+# Every request goes through the worker first so that the admin area is served behind admin
+# authentication; only the hashed build assets are served directly.
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+run_worker_first = ["/*", "!/_/admin/assets/*"]
